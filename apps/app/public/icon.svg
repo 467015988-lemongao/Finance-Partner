@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="生活记账图标">
+  <rect width="512" height="512" rx="116" fill="#2f6bff" />
+  <rect x="112" y="150" width="288" height="212" rx="40" fill="#ffffff" />
+  <path d="M112 206h288" stroke="#dbe5ff" stroke-width="16" />
+  <rect x="296" y="238" width="104" height="56" rx="28" fill="#dbe5ff" />
+  <circle cx="352" cy="266" r="12" fill="#2f6bff" />
+  <rect x="150" y="238" width="104" height="14" rx="7" fill="#e8eeff" />
+  <rect x="150" y="270" width="76" height="14" rx="7" fill="#e8eeff" />
+  <path d="M150 312h56" stroke="#dbe5ff" stroke-width="14" stroke-linecap="round" />
+</svg>

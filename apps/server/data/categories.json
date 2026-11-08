@@ -1,0 +1,58 @@
+[
+  {
+    "id": "c_1794129034528_87el",
+    "name": "餐饮",
+    "icon": "🍜",
+    "color": "#9254de",
+    "isDefault": true,
+    "createdAt": "2026-11-08T09:10:34.528Z"
+  },
+  {
+    "id": "c_1794129034529_898c",
+    "name": "交通",
+    "icon": "🚌",
+    "color": "#40a9ff",
+    "isDefault": true,
+    "createdAt": "2026-11-08T09:10:34.529Z"
+  },
+  {
+    "id": "c_1794129034530_78hg",
+    "name": "购物",
+    "icon": "🛍️",
+    "color": "#9254de",
+    "isDefault": true,
+    "createdAt": "2026-11-08T09:10:34.530Z"
+  },
+  {
+    "id": "c_1794129034530_nsxd",
+    "name": "居住",
+    "icon": "🏠",
+    "color": "#36cfc9",
+    "isDefault": true,
+    "createdAt": "2026-11-08T09:10:34.531Z"
+  },
+  {
+    "id": "c_1794129034530_blek",
+    "name": "娱乐",
+    "icon": "🎮",
+    "color": "#ffc53d",
+    "isDefault": true,
+    "createdAt": "2026-11-08T09:10:34.532Z"
+  },
+  {
+    "id": "c_1794129034530_if73",
+    "name": "医疗",
+    "icon": "💊",
+    "color": "#ff4d4f",
+    "isDefault": true,
+    "createdAt": "2026-11-08T09:10:34.533Z"
+  },
+  {
+    "id": "c_1794129034530_d02j",
+    "name": "其他",
+    "icon": "📦",
+    "color": "#8c8c8c",
+    "isDefault": true,
+    "createdAt": "2026-11-08T09:10:34.534Z"
+  }
+]

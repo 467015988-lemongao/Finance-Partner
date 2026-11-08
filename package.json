@@ -1,0 +1,25 @@
+{
+  "name": "expense-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "生活记账应用：Express 后端 + Web 桌面端 + App 移动端（H5/PWA）",
+  "workspaces": [
+    "apps/server",
+    "apps/web",
+    "apps/app"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n server,web,app -c blue,green,magenta \"npm:dev:server\" \"npm:dev:web\" \"npm:dev:app\"",
+    "dev:server": "npm run dev -w expense-tracker-server",
+    "dev:web": "npm run dev -w expense-tracker-web",
+    "dev:app": "npm run dev -w expense-tracker-app",
+    "start": "npm start -w expense-tracker-server",
+    "build": "npm run build -w expense-tracker-web && npm run build -w expense-tracker-app",
+    "preview:web": "npm run preview -w expense-tracker-web",
+    "preview:app": "npm run preview -w expense-tracker-app"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
