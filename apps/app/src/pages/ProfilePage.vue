@@ -5,6 +5,12 @@ import BottomSheet from '../components/BottomSheet.vue'
 import CategoryForm from '../components/CategoryForm.vue'
 import ConfirmSheet from '../components/ConfirmSheet.vue'
 import { hexToRgba } from '../utils/format'
+import {
+  DEFAULT_ADD_LABEL,
+  MAX_ADD_LABEL_LENGTH,
+  preferences,
+  setAddLabel,
+} from '../utils/preferences'
 
 const props = defineProps({
   categories: { type: Array, default: () => [] },
@@ -30,6 +36,26 @@ const visibleCategories = computed(() =>
 
 const pendingDelete = ref(null)
 const deleting = ref(false)
+
+const showLabelSheet = ref(false)
+const labelDraft = ref('')
+const labelError = ref('')
+
+function openLabelEdit() {
+  labelDraft.value = preferences.addLabel
+  labelError.value = ''
+  showLabelSheet.value = true
+}
+
+function saveLabel() {
+  const message = setAddLabel(labelDraft.value)
+  if (message) {
+    labelError.value = message
+    return
+  }
+  showLabelSheet.value = false
+  toast('显示名已更新')
+}
 
 const deleteMessage = computed(() =>
   pendingDelete.value
@@ -101,6 +127,16 @@ async function confirmDelete() {
         <p class="page-sub">自定义你的记账类目</p>
       </div>
     </header>
+
+    <section class="setting-card card">
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-name">记账入口显示名</div>
+          <div class="setting-desc">当前显示：{{ preferences.addLabel }}</div>
+        </div>
+        <button type="button" class="icon-btn" @click="openLabelEdit">编辑</button>
+      </div>
+    </section>
 
     <div class="segmented" role="group" aria-label="类目类型">
       <button
@@ -203,10 +239,79 @@ async function confirmDelete() {
       @cancel="pendingDelete = null"
       @confirm="confirmDelete"
     />
+
+    <BottomSheet :open="showLabelSheet" title="修改显示名" @close="showLabelSheet = false">
+      <form class="label-form" novalidate @submit.prevent="saveLabel">
+        <div class="field-block">
+          <label class="field-label" for="add-label-input">显示名</label>
+          <input
+            id="add-label-input"
+            v-model="labelDraft"
+            class="text-input"
+            type="text"
+            :maxlength="MAX_ADD_LABEL_LENGTH"
+            :placeholder="DEFAULT_ADD_LABEL"
+          />
+        </div>
+        <p class="label-hint">
+          最多 {{ MAX_ADD_LABEL_LENGTH }} 个字符，用于底部标签、记账页标题与「去…」入口
+        </p>
+        <p v-if="labelError" class="label-error">{{ labelError }}</p>
+        <button type="submit" class="btn-primary">保存</button>
+      </form>
+    </BottomSheet>
   </div>
 </template>
 
 <style scoped>
+.setting-card {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+}
+
+.setting-info {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.setting-name {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.setting-desc {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.label-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.label-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.label-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 12px;
+}
+
 .list-head {
   display: flex;
   align-items: center;

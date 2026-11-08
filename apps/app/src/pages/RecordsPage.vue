@@ -13,6 +13,7 @@ import {
   formatMonthLabel,
   shiftMonthKey,
 } from '../utils/format'
+import { preferences } from '../utils/preferences'
 
 const props = defineProps({
   categories: { type: Array, default: () => [] },
@@ -215,7 +216,9 @@ onMounted(load)
       <span class="state-emoji">🧾</span>
       <p class="state-title">暂无账目记录</p>
       <p class="state-desc">记录第一笔收支，开始管理你的钱包</p>
-      <button type="button" class="state-action" @click="$emit('go-add')">去记一笔</button>
+      <button type="button" class="state-action" @click="$emit('go-add')">
+        去{{ preferences.addLabel }}
+      </button>
     </div>
 
     <div v-else class="day-groups">

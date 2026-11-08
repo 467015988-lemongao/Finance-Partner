@@ -1,16 +1,19 @@
 <script setup>
+import { computed } from 'vue'
+import { preferences } from '../utils/preferences'
+
 defineProps({
   active: { type: String, default: 'add' },
 })
 
 defineEmits(['change'])
 
-const items = [
-  { key: 'add', icon: '✏️', label: '记一笔' },
+const items = computed(() => [
+  { key: 'add', icon: '✏️', label: preferences.addLabel },
   { key: 'records', icon: '📋', label: '明细' },
   { key: 'stats', icon: '📊', label: '统计' },
   { key: 'profile', icon: '👤', label: '我的' },
-]
+])
 </script>
 
 <template>

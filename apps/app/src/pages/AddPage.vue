@@ -3,6 +3,7 @@ import { inject, onMounted, ref } from 'vue'
 import { api } from '../api'
 import RecordForm from '../components/RecordForm.vue'
 import { currentMonthKey, formatMoney, formatTodayLabel } from '../utils/format'
+import { preferences } from '../utils/preferences'
 
 const props = defineProps({
   categories: { type: Array, default: () => [] },
@@ -61,7 +62,7 @@ onMounted(loadSummary)
   <div class="page">
     <header class="page-head">
       <div>
-        <h1 class="page-title">记一笔</h1>
+        <h1 class="page-title">{{ preferences.addLabel }}</h1>
         <p class="page-sub">{{ todayLabel }}</p>
       </div>
     </header>

@@ -1,1 +1,47 @@
-[]
+[
+  {
+    "id": "r_1794142331004_m925",
+    "amount": 100,
+    "categoryId": "c_1794139501561_givp",
+    "type": "income",
+    "date": "2026-11-08",
+    "note": "",
+    "createdAt": "2026-11-08T12:52:11.004Z"
+  },
+  {
+    "id": "r_1794142868597_4c4t",
+    "amount": 1,
+    "categoryId": "c_1794129034528_87el",
+    "type": "expense",
+    "date": "2026-11-07",
+    "note": "",
+    "createdAt": "2026-11-08T13:01:08.597Z"
+  },
+  {
+    "id": "r_1794142871795_e7ab",
+    "amount": 243,
+    "categoryId": "c_1794129034528_87el",
+    "type": "expense",
+    "date": "2026-11-08",
+    "note": "",
+    "createdAt": "2026-11-08T13:01:11.796Z"
+  },
+  {
+    "id": "r_1794142875177_6a5g",
+    "amount": 143,
+    "categoryId": "c_1794129034529_898c",
+    "type": "expense",
+    "date": "2026-11-08",
+    "note": "",
+    "createdAt": "2026-11-08T13:01:15.177Z"
+  },
+  {
+    "id": "r_1794142906175_5if6",
+    "amount": 54357,
+    "categoryId": "c_1794139501561_givp",
+    "type": "income",
+    "date": "2026-11-08",
+    "note": "",
+    "createdAt": "2026-11-08T13:01:46.175Z"
+  }
+]
