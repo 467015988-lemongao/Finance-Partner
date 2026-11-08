@@ -15,9 +15,18 @@ const props = defineProps({
 
 const toast = inject('toast', () => {})
 
+const type = ref('expense')
+const formType = ref('expense')
 const showForm = ref(false)
 const editingCategory = ref(null)
 const saving = ref(false)
+
+const typeLabel = computed(() => (type.value === 'income' ? '收入' : '支出'))
+const visibleCategories = computed(() =>
+  props.categories.filter((category) =>
+    (category.type === 'income' ? 'income' : 'expense') === type.value,
+  ),
+)
 
 const pendingDelete = ref(null)
 const deleting = ref(false)
@@ -35,6 +44,7 @@ function reloadCategories() {
 
 function openAdd() {
   editingCategory.value = null
+  formType.value = type.value
   showForm.value = true
 }
 
@@ -92,7 +102,34 @@ async function confirmDelete() {
       </div>
     </header>
 
-    <button type="button" class="btn-primary" @click="openAdd">＋ 新增类目</button>
+    <div class="segmented" role="group" aria-label="类目类型">
+      <button
+        type="button"
+        :class="{ active: type === 'expense' }"
+        :aria-pressed="type === 'expense'"
+        @click="type = 'expense'"
+      >
+        支出
+      </button>
+      <button
+        type="button"
+        class="income"
+        :class="{ active: type === 'income' }"
+        :aria-pressed="type === 'income'"
+        @click="type = 'income'"
+      >
+        收入
+      </button>
+    </div>
+
+    <button type="button" class="btn-primary" @click="openAdd">
+      ＋ 新增{{ typeLabel }}类目
+    </button>
+
+    <div class="list-head">
+      <span>{{ typeLabel }}类目</span>
+      <span class="list-count">{{ visibleCategories.length }} 个</span>
+    </div>
 
     <div v-if="loading" class="category-card card">
       <div v-for="n in 4" :key="n" class="skeleton category-skeleton"></div>
@@ -105,15 +142,17 @@ async function confirmDelete() {
       <button type="button" class="state-action" @click="reloadCategories">重试</button>
     </div>
 
-    <div v-else-if="!categories.length" class="state-block">
+    <div v-else-if="!visibleCategories.length" class="state-block">
       <span class="state-emoji">🗂️</span>
-      <p class="state-title">暂无类目</p>
-      <p class="state-desc">新增一个类目，开始记录你的生活开支</p>
-      <button type="button" class="state-action" @click="openAdd">新增类目</button>
+      <p class="state-title">暂无{{ typeLabel }}类目</p>
+      <p class="state-desc">新增一个{{ typeLabel }}类目，开始记录你的收支</p>
+      <button type="button" class="state-action" @click="openAdd">
+        新增{{ typeLabel }}类目
+      </button>
     </div>
 
     <div v-else class="category-card card">
-      <div v-for="category in categories" :key="category.id" class="category-row">
+      <div v-for="category in visibleCategories" :key="category.id" class="category-row">
         <div
           class="cat-avatar"
           :style="{
@@ -147,6 +186,7 @@ async function confirmDelete() {
     >
       <CategoryForm
         :initial="editingCategory"
+        :default-type="formType"
         :submitting="saving"
         :submit-label="editingCategory ? '保存修改' : '添加类目'"
         @submit="handleSave"
@@ -167,6 +207,21 @@ async function confirmDelete() {
 </template>
 
 <style scoped>
+.list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.list-count {
+  color: var(--muted);
+  font-weight: 500;
+}
+
 .category-card {
   display: flex;
   flex-direction: column;

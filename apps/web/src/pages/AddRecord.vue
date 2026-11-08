@@ -76,7 +76,7 @@ onUnmounted(() => clearTimeout(successTimer));
     <header class="page-header">
       <div class="page-heading">
         <h1 class="page-title">记账</h1>
-        <p class="page-subtitle">记录每一笔生活开销，掌握每日成本</p>
+        <p class="page-subtitle">记录每一笔收入与支出，掌握每日收支</p>
       </div>
       <span class="month-badge">{{ monthLabel }}</span>
     </header>
@@ -133,7 +133,12 @@ onUnmounted(() => clearTimeout(successTimer));
             <div class="recent-main">
               <div class="recent-top">
                 <span class="recent-cat">{{ categoryOf(record.categoryId).name }}</span>
-                <span class="recent-amount">¥{{ formatMoney(record.amount) }}</span>
+                <span
+                  class="recent-amount"
+                  :class="{ 'is-income': record.type === 'income' }"
+                >
+                  {{ record.type === 'income' ? '+' : '-' }}¥{{ formatMoney(record.amount) }}
+                </span>
               </div>
               <div class="recent-meta">
                 <span>{{ formatDateLabel(record.date) }}</span>
@@ -235,6 +240,10 @@ onUnmounted(() => clearTimeout(successTimer));
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.recent-amount.is-income {
+  color: var(--success);
 }
 
 .recent-meta {

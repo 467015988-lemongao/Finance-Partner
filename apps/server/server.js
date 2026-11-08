@@ -22,6 +22,17 @@ const DEFAULT_CATEGORIES = [
   { name: '其他', icon: '📦', color: '#8c8c8c' },
 ];
 
+const DEFAULT_INCOME_CATEGORIES = [
+  { name: '工资', icon: '💰', color: '#52c41a' },
+  { name: '奖金', icon: '🏆', color: '#faad14' },
+  { name: '理财', icon: '📈', color: '#13c2c2' },
+  { name: '兼职', icon: '💼', color: '#2f54eb' },
+  { name: '红包', icon: '🧧', color: '#f5222d' },
+  { name: '其他收入', icon: '🪙', color: '#8c8c8c' },
+];
+
+const TYPES = ['expense', 'income'];
+
 const ID_CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789';
 
 let categories = [];
@@ -71,9 +82,27 @@ function buildDefaultCategories() {
     name: item.name,
     icon: item.icon,
     color: item.color,
+    type: 'expense',
     isDefault: true,
     createdAt: new Date(base + index).toISOString(),
   }));
+}
+
+function appendDefaultIncomeCategories() {
+  const existingTimes = categories
+    .map((item) => Date.parse(item.createdAt))
+    .filter((value) => Number.isFinite(value));
+  const base = Math.max(Date.now(), ...existingTimes);
+  const created = DEFAULT_INCOME_CATEGORIES.map((item, index) => ({
+    id: genId('c_'),
+    name: item.name,
+    icon: item.icon,
+    color: item.color,
+    type: 'income',
+    isDefault: true,
+    createdAt: new Date(base + index + 1).toISOString(),
+  }));
+  categories.push(...created);
 }
 
 async function initStorage() {
@@ -82,19 +111,43 @@ async function initStorage() {
   const loadedCategories = await readJsonArray(CATEGORIES_FILE);
   const loadedRecords = await readJsonArray(RECORDS_FILE);
 
+  let categoriesChanged = false;
+  let recordsChanged = false;
+
   if (loadedCategories) {
     categories = loadedCategories;
+    for (const item of categories) {
+      if (!TYPES.includes(item.type)) {
+        item.type = 'expense';
+        categoriesChanged = true;
+      }
+    }
   } else {
     categories = buildDefaultCategories();
-    await persistCategories();
+    categoriesChanged = true;
+  }
+
+  if (!categories.some((item) => item.type === 'income')) {
+    appendDefaultIncomeCategories();
+    categoriesChanged = true;
   }
 
   if (loadedRecords) {
     records = loadedRecords;
+    const categoryTypeMap = new Map(categories.map((item) => [item.id, item.type]));
+    for (const item of records) {
+      if (!TYPES.includes(item.type)) {
+        item.type = categoryTypeMap.get(item.categoryId) ?? 'expense';
+        recordsChanged = true;
+      }
+    }
   } else {
     records = [];
-    await persistRecords();
+    recordsChanged = true;
   }
+
+  if (categoriesChanged) await persistCategories();
+  if (recordsChanged) await persistRecords();
 }
 
 /* ---------------- 通用工具 ---------------- */
@@ -215,10 +268,21 @@ function normalizeCategoryName(value) {
   return { name };
 }
 
-function isDuplicateCategoryName(name, excludeId) {
+function parseOptionalType(value) {
+  if (value === undefined || value === null || value === '') {
+    return { provided: false, type: null };
+  }
+  const text = typeof value === 'string' ? value.trim() : '';
+  if (!TYPES.includes(text)) return { provided: true, type: null };
+  return { provided: true, type: text };
+}
+
+function isDuplicateCategoryName(name, excludeId, type) {
   const target = name.toLowerCase();
   return categories.some(
-    (item) => item.id !== excludeId && String(item.name).trim().toLowerCase() === target,
+    (item) => item.id !== excludeId
+      && item.type === type
+      && String(item.name).trim().toLowerCase() === target,
   );
 }
 
@@ -247,20 +311,32 @@ app.use(express.json());
 /* ---------------- 类目接口 ---------------- */
 
 app.get('/api/categories', wrap(async (req, res) => {
-  ok(res, { items: sortedCategories() });
+  let items = sortedCategories();
+  const parsedType = parseOptionalType(req.query.type);
+  if (parsedType.provided && !parsedType.type) return fail(res, 400, '类目类型不正确');
+  if (parsedType.type) items = items.filter((item) => item.type === parsedType.type);
+  ok(res, { items });
 }));
 
 app.post('/api/categories', wrap(async (req, res) => {
   const body = req.body ?? {};
   const parsedName = normalizeCategoryName(body.name);
   if (parsedName.error) return fail(res, 400, parsedName.error);
-  if (isDuplicateCategoryName(parsedName.name)) return fail(res, 400, '该类目已存在');
+
+  const parsedType = parseOptionalType(body.type);
+  if (parsedType.provided && !parsedType.type) return fail(res, 400, '类目类型不正确');
+  const type = parsedType.type ?? 'expense';
+
+  if (isDuplicateCategoryName(parsedName.name, undefined, type)) {
+    return fail(res, 400, '该类目已存在');
+  }
 
   const category = {
     id: genId('c_'),
     name: parsedName.name,
     icon: normalizeIcon(body.icon, '📦'),
     color: normalizeColor(body.color, '#8c8c8c'),
+    type,
     isDefault: false,
     createdAt: new Date().toISOString(),
   };
@@ -277,7 +353,7 @@ app.put('/api/categories/:id', wrap(async (req, res) => {
   const body = req.body ?? {};
   const parsedName = normalizeCategoryName(body.name);
   if (parsedName.error) return fail(res, 400, parsedName.error);
-  if (isDuplicateCategoryName(parsedName.name, category.id)) {
+  if (isDuplicateCategoryName(parsedName.name, category.id, category.type)) {
     return fail(res, 400, '该类目已存在');
   }
 
@@ -293,11 +369,13 @@ app.delete('/api/categories/:id', wrap(async (req, res) => {
   const index = categories.findIndex((item) => item.id === req.params.id);
   if (index === -1) return fail(res, 404, '类目不存在');
 
-  const usedCount = records.filter((item) => item.categoryId === req.params.id).length;
+  const category = categories[index];
+  const usedCount = records.filter((item) => item.categoryId === category.id).length;
   if (usedCount > 0) {
     return fail(res, 409, `该类目下存在 ${usedCount} 笔记录，无法删除`);
   }
-  if (categories.length - 1 <= 0) return fail(res, 400, '至少保留一个记账类目');
+  const sameTypeCount = categories.filter((item) => item.type === category.type).length;
+  if (sameTypeCount - 1 <= 0) return fail(res, 400, '至少保留一个该类目');
 
   const [removed] = categories.splice(index, 1);
   await persistCategories();
@@ -313,8 +391,17 @@ function validateRecordBody(body) {
   }
 
   const categoryId = typeof body.categoryId === 'string' ? body.categoryId.trim() : '';
-  if (!categories.some((item) => item.id === categoryId)) {
+  const category = categories.find((item) => item.id === categoryId);
+  if (!category) {
     return { error: '记账类目不存在' };
+  }
+
+  const parsedType = parseOptionalType(body.type);
+  if (parsedType.provided && !parsedType.type) {
+    return { error: '账目类型不正确' };
+  }
+  if (parsedType.type && parsedType.type !== category.type) {
+    return { error: '账目类型与类目类型不一致' };
   }
 
   const date = typeof body.date === 'string' ? body.date.trim() : '';
@@ -327,13 +414,17 @@ function validateRecordBody(body) {
     return { error: '备注最多 50 个字符' };
   }
 
-  return { amount: centsToYuan(cents), categoryId, date, note };
+  return { amount: centsToYuan(cents), categoryId, type: category.type, date, note };
 }
 
 app.get('/api/records', wrap(async (req, res) => {
   const { month, from, to, categoryId, keyword } = req.query;
 
   let items = records.slice();
+
+  const parsedType = parseOptionalType(req.query.type);
+  if (parsedType.provided && !parsedType.type) return fail(res, 400, '账目类型不正确');
+  if (parsedType.type) items = items.filter((item) => item.type === parsedType.type);
 
   if (month !== undefined && month !== '') {
     const parsed = parseMonth(String(month));
@@ -365,7 +456,19 @@ app.get('/api/records', wrap(async (req, res) => {
     return String(b.createdAt).localeCompare(String(a.createdAt));
   });
 
-  ok(res, { items, total: centsToYuan(sumCents(items)) });
+  let expenseCents = 0;
+  let incomeCents = 0;
+  for (const item of items) {
+    if (item.type === 'income') incomeCents += amountToCents(item.amount);
+    else expenseCents += amountToCents(item.amount);
+  }
+
+  ok(res, {
+    items,
+    total: centsToYuan(sumCents(items)),
+    expenseTotal: centsToYuan(expenseCents),
+    incomeTotal: centsToYuan(incomeCents),
+  });
 }));
 
 app.post('/api/records', wrap(async (req, res) => {
@@ -377,6 +480,7 @@ app.post('/api/records', wrap(async (req, res) => {
     id: genId('r_'),
     amount: validated.amount,
     categoryId: validated.categoryId,
+    type: validated.type,
     date: validated.date,
     note: validated.note,
     createdAt: new Date().toISOString(),
@@ -397,6 +501,7 @@ app.put('/api/records/:id', wrap(async (req, res) => {
 
   record.amount = validated.amount;
   record.categoryId = validated.categoryId;
+  record.type = validated.type;
   record.date = validated.date;
   record.note = validated.note;
 
@@ -421,28 +526,43 @@ app.get('/api/stats/summary', wrap(async (req, res) => {
   const { year, month, key } = parsed;
 
   const monthRecords = records.filter((item) => String(item.date).startsWith(key));
-  const totalCents = sumCents(monthRecords);
+  const expenseRecords = monthRecords.filter((item) => item.type !== 'income');
+  const incomeRecords = monthRecords.filter((item) => item.type === 'income');
+  const expenseCents = sumCents(expenseRecords);
+  const incomeCents = sumCents(incomeRecords);
 
   const prev = shiftMonth(year, month, -1);
-  const prevCents = sumCents(records.filter((item) => String(item.date).startsWith(prev.key)));
+  const prevRecords = records.filter((item) => String(item.date).startsWith(prev.key));
+  const prevExpenseCents = sumCents(prevRecords.filter((item) => item.type !== 'income'));
+  const prevIncomeCents = sumCents(prevRecords.filter((item) => item.type === 'income'));
 
   const now = new Date();
   const isCurrentMonth = key === currentMonthInfo().key;
   const elapsedDays = isCurrentMonth ? now.getDate() : daysInMonth(year, month);
-  const dailyAvg = elapsedDays > 0 ? centsToYuan(Math.round(totalCents / elapsedDays)) : 0;
+  const dailyAvg = elapsedDays > 0 ? centsToYuan(Math.round(expenseCents / elapsedDays)) : 0;
 
-  const changePercent = prevCents > 0
-    ? Math.round(((totalCents - prevCents) / prevCents) * 1000) / 10
+  const changePercent = prevExpenseCents > 0
+    ? Math.round(((expenseCents - prevExpenseCents) / prevExpenseCents) * 1000) / 10
     : null;
+
+  const expenseTotal = centsToYuan(expenseCents);
+  const incomeTotal = centsToYuan(incomeCents);
 
   ok(res, {
     month: key,
-    total: centsToYuan(totalCents),
-    count: monthRecords.length,
+    total: expenseTotal,
+    count: expenseRecords.length,
     dailyAvg,
     prevMonth: prev.key,
-    prevTotal: centsToYuan(prevCents),
+    prevTotal: centsToYuan(prevExpenseCents),
     changePercent,
+    expenseTotal,
+    expenseCount: expenseRecords.length,
+    incomeTotal,
+    incomeCount: incomeRecords.length,
+    balance: centsToYuan(incomeCents - expenseCents),
+    prevIncomeTotal: centsToYuan(prevIncomeCents),
+    prevBalance: centsToYuan(prevIncomeCents - prevExpenseCents),
   });
 }));
 
@@ -451,7 +571,13 @@ app.get('/api/stats/by-category', wrap(async (req, res) => {
   if (!parsed) return fail(res, 400, '月份格式不正确');
   const { key } = parsed;
 
-  const monthRecords = records.filter((item) => String(item.date).startsWith(key));
+  const parsedType = parseOptionalType(req.query.type);
+  if (parsedType.provided && !parsedType.type) return fail(res, 400, '账目类型不正确');
+  const type = parsedType.type ?? 'expense';
+
+  const monthRecords = records.filter(
+    (item) => String(item.date).startsWith(key) && item.type === type,
+  );
   const totalsByCategory = new Map();
   for (const record of monthRecords) {
     const cents = amountToCents(record.amount);
@@ -475,7 +601,7 @@ app.get('/api/stats/by-category', wrap(async (req, res) => {
     })
     .sort((a, b) => b.amount - a.amount);
 
-  ok(res, { month: key, total: centsToYuan(totalCents), items });
+  ok(res, { month: key, type, total: centsToYuan(totalCents), items });
 }));
 
 app.get('/api/stats/daily', wrap(async (req, res) => {
@@ -483,10 +609,15 @@ app.get('/api/stats/daily', wrap(async (req, res) => {
   if (!parsed) return fail(res, 400, '月份格式不正确');
   const { year, month, key } = parsed;
 
+  const parsedType = parseOptionalType(req.query.type);
+  if (parsedType.provided && !parsedType.type) return fail(res, 400, '账目类型不正确');
+  const type = parsedType.type ?? 'expense';
+
   const days = daysInMonth(year, month);
   const dailyCents = new Array(days + 1).fill(0);
 
   for (const record of records) {
+    if (record.type !== type) continue;
     if (!String(record.date).startsWith(key)) continue;
     const day = Number(String(record.date).slice(8, 10));
     if (day >= 1 && day <= days) dailyCents[day] += amountToCents(record.amount);
@@ -500,7 +631,7 @@ app.get('/api/stats/daily', wrap(async (req, res) => {
     });
   }
 
-  ok(res, { month: key, items });
+  ok(res, { month: key, type, items });
 }));
 
 app.get('/api/stats/monthly', wrap(async (req, res) => {
@@ -514,10 +645,16 @@ app.get('/api/stats/monthly', wrap(async (req, res) => {
   const items = [];
   for (let offset = count - 1; offset >= 0; offset -= 1) {
     const target = shiftMonth(endParsed.year, endParsed.month, -offset);
-    const totalCents = sumCents(
-      records.filter((item) => String(item.date).startsWith(target.key)),
-    );
-    items.push({ month: target.key, total: centsToYuan(totalCents) });
+    const targetRecords = records.filter((item) => String(item.date).startsWith(target.key));
+    const expenseCents = sumCents(targetRecords.filter((item) => item.type !== 'income'));
+    const incomeCents = sumCents(targetRecords.filter((item) => item.type === 'income'));
+    const expense = centsToYuan(expenseCents);
+    items.push({
+      month: target.key,
+      expense,
+      income: centsToYuan(incomeCents),
+      total: expense,
+    });
   }
 
   ok(res, { items });

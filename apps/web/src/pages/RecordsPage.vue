@@ -18,10 +18,12 @@ const props = defineProps({
 
 const month = ref(currentMonth());
 const categoryId = ref('');
+const typeFilter = ref('');
 const keywordInput = ref('');
 const keyword = ref('');
 const records = ref([]);
-const total = ref(0);
+const expenseTotal = ref(0);
+const incomeTotal = ref(0);
 const loading = ref(true);
 const errorMsg = ref('');
 
@@ -41,6 +43,11 @@ const monthLabel = computed(() => formatMonthLabel(month.value));
 const categoryMap = computed(
   () => new Map(props.categories.map((category) => [category.id, category])),
 );
+const balance = computed(() => incomeTotal.value - expenseTotal.value);
+const balanceText = computed(() => {
+  const value = balance.value;
+  return value < 0 ? `-¥${formatMoney(Math.abs(value))}` : `¥${formatMoney(value)}`;
+});
 
 function categoryOf(id) {
   return categoryMap.value.get(id) || { name: '未知类目', icon: '❔', color: '#8c8c8c' };
@@ -69,6 +76,7 @@ async function loadRecords() {
 
   const params = new URLSearchParams();
   params.set('month', month.value);
+  if (typeFilter.value) params.set('type', typeFilter.value);
   if (categoryId.value) params.set('categoryId', categoryId.value);
   if (keyword.value.trim()) params.set('keyword', keyword.value.trim());
 
@@ -76,11 +84,13 @@ async function loadRecords() {
     const data = await apiGet(`/records?${params.toString()}`);
     if (seq !== requestSeq || destroyed) return;
     records.value = data.items || [];
-    total.value = Number(data.total) || 0;
+    expenseTotal.value = Number(data.expenseTotal) || 0;
+    incomeTotal.value = Number(data.incomeTotal) || 0;
   } catch (err) {
     if (seq !== requestSeq || destroyed) return;
     records.value = [];
-    total.value = 0;
+    expenseTotal.value = 0;
+    incomeTotal.value = 0;
     errorMsg.value = err.message;
   } finally {
     if (seq === requestSeq && !destroyed) loading.value = false;
@@ -144,7 +154,7 @@ async function confirmDelete() {
   }
 }
 
-watch([month, categoryId], () => loadRecords());
+watch([month, categoryId, typeFilter], () => loadRecords());
 
 onMounted(loadRecords);
 
@@ -175,6 +185,36 @@ onUnmounted(() => {
     <div class="card toolbar-card">
       <div class="toolbar">
         <div class="toolbar-field">
+          <span class="toolbar-label">类型</span>
+          <div class="segmented type-filter">
+            <button
+              type="button"
+              class="segmented-btn"
+              :class="{ active: typeFilter === '' }"
+              @click="typeFilter = ''"
+            >
+              全部
+            </button>
+            <button
+              type="button"
+              class="segmented-btn"
+              :class="{ active: typeFilter === 'expense' }"
+              @click="typeFilter = 'expense'"
+            >
+              支出
+            </button>
+            <button
+              type="button"
+              class="segmented-btn is-income"
+              :class="{ active: typeFilter === 'income' }"
+              @click="typeFilter = 'income'"
+            >
+              收入
+            </button>
+          </div>
+        </div>
+
+        <div class="toolbar-field">
           <label class="toolbar-label" for="category-filter">类目</label>
           <select id="category-filter" v-model="categoryId" class="select category-select">
             <option value="">全部类目</option>
@@ -200,9 +240,24 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <div class="toolbar-total">
-          本月合计
-          <strong>¥{{ formatMoney(total) }}</strong>
+        <div class="toolbar-summary">
+          <div class="summary-item">
+            <span class="summary-label">支出合计</span>
+            <strong class="summary-value is-expense">¥{{ formatMoney(expenseTotal) }}</strong>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">收入合计</span>
+            <strong class="summary-value is-income">¥{{ formatMoney(incomeTotal) }}</strong>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">结余</span>
+            <strong
+              class="summary-value"
+              :class="balance < 0 ? 'is-expense' : 'is-income'"
+            >
+              {{ balanceText }}
+            </strong>
+          </div>
         </div>
       </div>
     </div>
@@ -248,7 +303,9 @@ onUnmounted(() => {
             </div>
 
             <div class="record-date">{{ record.date }}</div>
-            <div class="record-amount">¥{{ formatMoney(record.amount) }}</div>
+            <div class="record-amount" :class="{ 'is-income': record.type === 'income' }">
+              {{ record.type === 'income' ? '+' : '-' }}¥{{ formatMoney(record.amount) }}
+            </div>
 
             <div class="record-actions">
               <button type="button" class="btn btn-ghost btn-sm" @click="openEdit(record)">
@@ -281,7 +338,9 @@ onUnmounted(() => {
       <p class="confirm-text">确定要删除这条账目吗？删除后无法恢复。</p>
       <div class="confirm-summary">
         <span>{{ categoryOf(deleteTarget.categoryId).icon }} {{ categoryOf(deleteTarget.categoryId).name }}</span>
-        <strong>¥{{ formatMoney(deleteTarget.amount) }}</strong>
+        <strong :class="{ 'is-income': deleteTarget.type === 'income' }">
+          {{ deleteTarget.type === 'income' ? '+' : '-' }}¥{{ formatMoney(deleteTarget.amount) }}
+        </strong>
       </div>
       <p class="muted confirm-date">
         {{ formatDateLabel(deleteTarget.date) }}
@@ -346,19 +405,39 @@ onUnmounted(() => {
   padding-left: 34px;
 }
 
-.toolbar-total {
+.toolbar-summary {
+  display: flex;
+  align-items: flex-end;
+  gap: 20px;
   margin-left: auto;
-  padding-bottom: 9px;
-  color: var(--text-muted);
-  font-size: 13px;
+  padding-bottom: 3px;
+  flex-wrap: wrap;
 }
 
-.toolbar-total strong {
-  margin-left: 4px;
+.summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.summary-label {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.summary-value {
   color: var(--text);
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+
+.summary-value.is-expense {
+  color: var(--danger);
+}
+
+.summary-value.is-income {
+  color: var(--success);
 }
 
 .record-groups {
@@ -455,6 +534,10 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
+.record-amount.is-income {
+  color: var(--success);
+}
+
 .record-actions {
   display: flex;
   gap: 8px;
@@ -482,6 +565,10 @@ onUnmounted(() => {
   color: var(--danger);
   font-size: 16px;
   font-variant-numeric: tabular-nums;
+}
+
+.confirm-summary strong.is-income {
+  color: var(--success);
 }
 
 .confirm-date {

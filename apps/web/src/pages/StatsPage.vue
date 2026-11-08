@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import * as echarts from 'echarts/core';
 import { BarChart, PieChart } from 'echarts/charts';
 import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components';
@@ -22,6 +22,7 @@ echarts.use([
 ]);
 
 const month = ref(currentMonth());
+const chartType = ref('expense');
 const loading = ref(true);
 const errorMsg = ref('');
 const summary = ref(null);
@@ -40,10 +41,26 @@ let requestSeq = 0;
 let destroyed = false;
 
 const monthLabel = computed(() => formatMonthLabel(month.value));
-const hasData = computed(() => Number(summary.value?.count || 0) > 0);
-const hasMonthlyData = computed(() =>
-  monthlyItems.value.some((item) => Number(item.total) > 0),
+const typeLabel = computed(() => (chartType.value === 'income' ? '收入' : '支出'));
+const chartCount = computed(() =>
+  Number(
+    chartType.value === 'income'
+      ? summary.value?.incomeCount ?? 0
+      : summary.value?.expenseCount ?? 0,
+  ),
 );
+const hasChartData = computed(() => chartCount.value > 0);
+const hasMonthlyData = computed(() =>
+  monthlyItems.value.some(
+    (item) => Number(item.expense) > 0 || Number(item.income) > 0,
+  ),
+);
+const balanceValue = computed(() => Number(summary.value?.balance ?? 0));
+const balanceText = computed(() => {
+  const value = balanceValue.value;
+  return value < 0 ? `-¥${formatMoney(Math.abs(value))}` : `¥${formatMoney(value)}`;
+});
+const balanceClass = computed(() => (balanceValue.value < 0 ? 'is-negative' : 'is-positive'));
 
 const changePercent = computed(() => summary.value?.changePercent ?? null);
 
@@ -70,8 +87,8 @@ async function loadData() {
   try {
     const [summaryData, categoryData, dailyData, monthlyData] = await Promise.all([
       apiGet(`/stats/summary?month=${month.value}`),
-      apiGet(`/stats/by-category?month=${month.value}`),
-      apiGet(`/stats/daily?month=${month.value}`),
+      apiGet(`/stats/by-category?month=${month.value}&type=${chartType.value}`),
+      apiGet(`/stats/daily?month=${month.value}&type=${chartType.value}`),
       apiGet(`/stats/monthly?endMonth=${month.value}&months=6`),
     ]);
 
@@ -105,7 +122,7 @@ function buildPieOption() {
     tooltip: {
       trigger: 'item',
       formatter: (params) =>
-        `${params.marker}${params.name}<br/>支出 ¥${formatMoney(params.value)}（${params.percent}%）`,
+        `${params.marker}${params.name}<br/>${typeLabel.value} ¥${formatMoney(params.value)}（${params.percent}%）`,
     },
     legend: {
       type: 'scroll',
@@ -120,7 +137,7 @@ function buildPieOption() {
     },
     series: [
       {
-        name: '类目支出',
+        name: `类目${typeLabel.value}`,
         type: 'pie',
         radius: ['45%', '68%'],
         center: ['50%', '43%'],
@@ -150,7 +167,7 @@ function buildDailyOption() {
         const point = Array.isArray(params) ? params[0] : params;
         const item = items[point.dataIndex];
         if (!item) return '';
-        return `${item.date}<br/>支出 <strong>¥${formatMoney(item.amount)}</strong>`;
+        return `${item.date}<br/>${typeLabel.value} <strong>¥${formatMoney(item.amount)}</strong>`;
       },
     },
     xAxis: {
@@ -167,11 +184,16 @@ function buildDailyOption() {
     },
     series: [
       {
-        name: '当日支出',
+        name: `当日${typeLabel.value}`,
         type: 'bar',
         barMaxWidth: 14,
-        itemStyle: { color: '#2f6bff', borderRadius: [4, 4, 0, 0] },
-        emphasis: { itemStyle: { color: '#1d4ed8' } },
+        itemStyle: {
+          color: chartType.value === 'income' ? '#17a673' : '#e5484d',
+          borderRadius: [4, 4, 0, 0],
+        },
+        emphasis: {
+          itemStyle: { color: chartType.value === 'income' ? '#0f8a5f' : '#c93b3f' },
+        },
         data: items.map((item) => item.amount),
       },
     ],
@@ -182,7 +204,13 @@ function buildMonthlyOption() {
   const items = monthlyItems.value;
 
   return {
-    grid: { left: 12, right: 16, top: 24, bottom: 8, containLabel: true },
+    grid: { left: 12, right: 16, top: 40, bottom: 8, containLabel: true },
+    legend: {
+      top: 0,
+      itemWidth: 10,
+      itemHeight: 10,
+      textStyle: { fontSize: 12, color: '#4b5563' },
+    },
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
@@ -190,7 +218,7 @@ function buildMonthlyOption() {
         const point = Array.isArray(params) ? params[0] : params;
         const item = items[point.dataIndex];
         if (!item) return '';
-        return `${item.month}<br/>支出 <strong>¥${formatMoney(item.total)}</strong>`;
+        return `${item.month}<br/>支出 <strong>¥${formatMoney(item.expense)}</strong><br/>收入 <strong>¥${formatMoney(item.income)}</strong>`;
       },
     },
     xAxis: {
@@ -207,19 +235,27 @@ function buildMonthlyOption() {
     },
     series: [
       {
-        name: '月度支出',
+        name: '支出',
         type: 'bar',
-        barMaxWidth: 36,
-        itemStyle: { color: '#5b8cff', borderRadius: [6, 6, 0, 0] },
-        emphasis: { itemStyle: { color: '#2f6bff' } },
-        data: items.map((item) => item.total),
+        barMaxWidth: 18,
+        itemStyle: { color: '#e5484d', borderRadius: [4, 4, 0, 0] },
+        emphasis: { itemStyle: { color: '#c93b3f' } },
+        data: items.map((item) => item.expense),
+      },
+      {
+        name: '收入',
+        type: 'bar',
+        barMaxWidth: 18,
+        itemStyle: { color: '#17a673', borderRadius: [4, 4, 0, 0] },
+        emphasis: { itemStyle: { color: '#0f8a5f' } },
+        data: items.map((item) => item.income),
       },
     ],
   };
 }
 
 function renderCharts() {
-  if (hasData.value && categoryItems.value.length && pieEl.value) {
+  if (hasChartData.value && categoryItems.value.length && pieEl.value) {
     if (!pieChart) pieChart = echarts.init(pieEl.value);
     pieChart.setOption(buildPieOption(), true);
     pieChart.resize();
@@ -228,7 +264,7 @@ function renderCharts() {
     pieChart = null;
   }
 
-  if (hasData.value && dailyEl.value) {
+  if (hasChartData.value && dailyEl.value) {
     if (!dailyChart) dailyChart = echarts.init(dailyEl.value);
     dailyChart.setOption(buildDailyOption(), true);
     dailyChart.resize();
@@ -267,6 +303,8 @@ function changeMonth(delta) {
   loadData();
 }
 
+watch(chartType, () => loadData());
+
 onMounted(() => {
   loadData();
   window.addEventListener('resize', handleResize);
@@ -284,16 +322,36 @@ onUnmounted(() => {
     <header class="page-header">
       <div class="page-heading">
         <h1 class="page-title">统计分析</h1>
-        <p class="page-subtitle">看清支出结构与每日、月度变化</p>
+        <p class="page-subtitle">看清收支结构与每日、月度变化</p>
       </div>
-      <div class="month-switch">
-        <button type="button" class="month-btn" aria-label="上一月" @click="changeMonth(-1)">
-          ‹
-        </button>
-        <span class="month-label">{{ monthLabel }}</span>
-        <button type="button" class="month-btn" aria-label="下一月" @click="changeMonth(1)">
-          ›
-        </button>
+      <div class="header-controls">
+        <div class="segmented chart-type-switch">
+          <button
+            type="button"
+            class="segmented-btn"
+            :class="{ active: chartType === 'expense' }"
+            @click="chartType = 'expense'"
+          >
+            支出
+          </button>
+          <button
+            type="button"
+            class="segmented-btn is-income"
+            :class="{ active: chartType === 'income' }"
+            @click="chartType = 'income'"
+          >
+            收入
+          </button>
+        </div>
+        <div class="month-switch">
+          <button type="button" class="month-btn" aria-label="上一月" @click="changeMonth(-1)">
+            ‹
+          </button>
+          <span class="month-label">{{ monthLabel }}</span>
+          <button type="button" class="month-btn" aria-label="下一月" @click="changeMonth(1)">
+            ›
+          </button>
+        </div>
       </div>
     </header>
 
@@ -308,14 +366,30 @@ onUnmounted(() => {
     <template v-else>
       <div class="metric-grid">
         <div class="metric-card">
-          <span class="metric-label">本月总支出</span>
-          <strong class="metric-value">¥{{ formatMoney(summary?.total ?? 0) }}</strong>
+          <span class="metric-label">本月支出</span>
+          <strong class="metric-value is-expense">
+            ¥{{ formatMoney(summary?.expenseTotal ?? 0) }}
+          </strong>
           <span class="metric-sub">{{ monthLabel }}</span>
         </div>
         <div class="metric-card">
+          <span class="metric-label">本月收入</span>
+          <strong class="metric-value is-positive">
+            ¥{{ formatMoney(summary?.incomeTotal ?? 0) }}
+          </strong>
+          <span class="metric-sub">{{ summary?.incomeCount ?? 0 }} 笔收入</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-label">结余</span>
+          <strong class="metric-value" :class="balanceClass">{{ balanceText }}</strong>
+          <span class="metric-sub">收入 - 支出</span>
+        </div>
+        <div class="metric-card">
           <span class="metric-label">记账笔数</span>
-          <strong class="metric-value">
-            {{ summary?.count ?? 0 }}<span class="unit">笔</span>
+          <strong class="metric-value is-count">
+            {{ summary?.expenseCount ?? 0 }}<span class="unit">笔支出</span>
+            ·
+            {{ summary?.incomeCount ?? 0 }}<span class="unit">笔收入</span>
           </strong>
           <span class="metric-sub">本月累计记录</span>
         </div>
@@ -325,9 +399,9 @@ onUnmounted(() => {
           <span class="metric-sub">按已过天数计算</span>
         </div>
         <div class="metric-card">
-          <span class="metric-label">环比上月</span>
+          <span class="metric-label">环比支出</span>
           <strong class="metric-value" :class="changeClass">{{ changeText }}</strong>
-          <span class="metric-sub">上月 ¥{{ formatMoney(summary?.prevTotal ?? 0) }}</span>
+          <span class="metric-sub">上月支出 ¥{{ formatMoney(summary?.prevTotal ?? 0) }}</span>
         </div>
       </div>
 
@@ -336,14 +410,16 @@ onUnmounted(() => {
           <div class="card-head">
             <div>
               <h2 class="card-title">类目占比</h2>
-              <p class="card-subtitle">{{ monthLabel }} 支出结构</p>
+              <p class="card-subtitle">{{ monthLabel }} {{ typeLabel }}结构</p>
             </div>
             <span v-if="categoryItems.length" class="muted">
               {{ categoryItems.length }} 个类目
             </span>
           </div>
           <div class="chart-body">
-            <div v-if="!categoryItems.length" class="chart-empty">本月暂无数据</div>
+            <div v-if="!categoryItems.length" class="chart-empty">
+              本月暂无{{ typeLabel }}数据
+            </div>
             <div v-else ref="pieEl" class="chart"></div>
           </div>
         </section>
@@ -352,12 +428,14 @@ onUnmounted(() => {
           <div class="card-head">
             <div>
               <h2 class="card-title">每日趋势</h2>
-              <p class="card-subtitle">{{ monthLabel }} 每日支出</p>
+              <p class="card-subtitle">{{ monthLabel }} 每日{{ typeLabel }}</p>
             </div>
-            <span v-if="hasData" class="muted">共 {{ summary?.count ?? 0 }} 笔</span>
+            <span v-if="hasChartData" class="muted">共 {{ chartCount }} 笔</span>
           </div>
           <div class="chart-body">
-            <div v-if="!hasData" class="chart-empty">本月暂无数据</div>
+            <div v-if="!hasChartData" class="chart-empty">
+              本月暂无{{ typeLabel }}数据
+            </div>
             <div v-else ref="dailyEl" class="chart"></div>
           </div>
         </section>
@@ -366,11 +444,11 @@ onUnmounted(() => {
           <div class="card-head">
             <div>
               <h2 class="card-title">近 6 个月趋势</h2>
-              <p class="card-subtitle">截至 {{ monthLabel }} 的月度支出对比</p>
+              <p class="card-subtitle">截至 {{ monthLabel }} 的月度收支对比</p>
             </div>
           </div>
           <div class="chart-body">
-            <div v-if="!hasMonthlyData" class="chart-empty">本月暂无数据</div>
+            <div v-if="!hasMonthlyData" class="chart-empty">近 6 个月暂无数据</div>
             <div v-else ref="monthlyEl" class="chart"></div>
           </div>
         </section>
@@ -380,10 +458,50 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.chart-type-switch {
+  box-shadow: var(--shadow);
+}
+
+.metric-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.metric-value.is-expense,
+.metric-value.is-negative {
+  color: var(--danger);
+}
+
+.metric-value.is-positive {
+  color: var(--success);
+}
+
+.metric-value.is-count {
+  font-size: 18px;
+}
+
 .unit {
   margin-left: 2px;
   color: var(--text-muted);
   font-size: 14px;
   font-weight: 500;
+}
+
+@media (max-width: 1100px) {
+  .metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .metric-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 </style>

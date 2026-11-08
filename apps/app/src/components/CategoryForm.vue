@@ -3,6 +3,7 @@ import { ref, watch } from 'vue'
 
 const props = defineProps({
   initial: { type: Object, default: null },
+  defaultType: { type: String, default: 'expense' },
   submitting: { type: Boolean, default: false },
   submitLabel: { type: String, default: '保存' },
 })
@@ -25,11 +26,19 @@ const PRESET_ICONS = ['🍜', '🚌', '🛍️', '🏠', '🎮', '💊', '📦',
 const name = ref('')
 const icon = ref('📦')
 const color = ref(PRESET_COLORS[0])
+const type = ref('expense')
+
+function normalizeType(value) {
+  return value === 'income' ? 'income' : 'expense'
+}
 
 function syncFromInitial(value) {
   name.value = value ? value.name || '' : ''
   icon.value = value ? value.icon || '📦' : '📦'
   color.value = value ? value.color || PRESET_COLORS[0] : PRESET_COLORS[0]
+  type.value = value
+    ? normalizeType(value.type)
+    : normalizeType(props.defaultType)
 }
 
 watch(() => props.initial, syncFromInitial, { immediate: true })
@@ -48,12 +57,39 @@ function handleSubmit() {
     name: trimmedName,
     icon: String(icon.value).trim() || '📦',
     color: color.value || PRESET_COLORS[0],
+    type: type.value,
   })
 }
 </script>
 
 <template>
   <form class="category-form" novalidate @submit.prevent="handleSubmit">
+    <div class="field-block">
+      <div class="field-label">类型</div>
+      <div v-if="initial" class="type-readonly">
+        {{ type === 'income' ? '收入类目' : '支出类目' }}
+      </div>
+      <div v-else class="segmented" role="group" aria-label="类目类型">
+        <button
+          type="button"
+          :class="{ active: type === 'expense' }"
+          :aria-pressed="type === 'expense'"
+          @click="type = 'expense'"
+        >
+          支出
+        </button>
+        <button
+          type="button"
+          class="income"
+          :class="{ active: type === 'income' }"
+          :aria-pressed="type === 'income'"
+          @click="type = 'income'"
+        >
+          收入
+        </button>
+      </div>
+    </div>
+
     <div class="field-block">
       <label class="field-label" for="category-name">类目名称</label>
       <input
@@ -126,6 +162,16 @@ function handleSubmit() {
   display: flex;
   flex-direction: column;
   gap: 18px;
+}
+
+.type-readonly {
+  min-height: 42px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--bg-soft);
+  color: var(--text-2);
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .icon-row {

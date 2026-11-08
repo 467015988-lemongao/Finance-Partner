@@ -2,37 +2,68 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as echarts from 'echarts/core'
 import { BarChart, PieChart } from 'echarts/charts'
-import { GridComponent, TitleComponent, TooltipComponent } from 'echarts/components'
+import {
+  GridComponent,
+  LegendComponent,
+  TitleComponent,
+  TooltipComponent,
+} from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import { api } from '../api'
 import MonthSwitcher from '../components/MonthSwitcher.vue'
 import { currentMonthKey, formatMoney, shiftMonthKey } from '../utils/format'
 
-echarts.use([PieChart, BarChart, TitleComponent, TooltipComponent, GridComponent, CanvasRenderer])
+echarts.use([
+  PieChart,
+  BarChart,
+  TitleComponent,
+  TooltipComponent,
+  GridComponent,
+  LegendComponent,
+  CanvasRenderer,
+])
 
 const monthKey = ref(currentMonthKey())
+const chartType = ref('expense')
 const summary = ref(null)
 const byCategory = ref({ total: 0, items: [] })
 const daily = ref([])
+const monthly = ref([])
 const loading = ref(true)
 const error = ref('')
 
 const pieEl = ref(null)
 const barEl = ref(null)
+const monthlyEl = ref(null)
 let pieChart = null
 let barChart = null
+let monthlyChart = null
 let darkQuery = null
 let loadToken = 0
 
 const isDarkMode = ref(false)
 
-const hasData = computed(
-  () => Boolean(summary.value && summary.value.count > 0 && byCategory.value.items.length),
-)
+const typeLabel = computed(() => (chartType.value === 'income' ? '收入' : '支出'))
+
+const hasData = computed(() => {
+  const data = summary.value
+  if (!data) return false
+  const expenseCount = Number(data.expenseCount ?? data.count ?? 0)
+  const incomeCount = Number(data.incomeCount ?? 0)
+  return expenseCount + incomeCount > 0
+})
+
+const chartHasData = computed(() => byCategory.value.items.length > 0)
 
 const metrics = computed(() => {
   const data = summary.value
   if (!data) return []
+  const expenseCount = Number(data.expenseCount ?? data.count ?? 0)
+  const incomeCount = Number(data.incomeCount ?? 0)
+  const balance = Number(
+    data.balance ?? Number(data.incomeTotal || 0) - Number(data.total || 0),
+  )
+
   const change = data.changePercent
   let changeText = '—'
   let tone = ''
@@ -41,9 +72,22 @@ const metrics = computed(() => {
     changeText = `${value > 0 ? '+' : ''}${value.toFixed(1)}%`
     tone = value > 0 ? 'up' : value < 0 ? 'down' : ''
   }
+
   return [
     { label: '本月支出', value: `¥${formatMoney(data.total)}`, tone: '' },
-    { label: '笔数', value: String(data.count), tone: '' },
+    { label: '本月收入', value: `¥${formatMoney(data.incomeTotal)}`, tone: 'income' },
+    {
+      label: '结余',
+      value: `${balance < 0 ? '-' : ''}¥${formatMoney(Math.abs(balance))}`,
+      tone: balance < 0 ? 'loss' : balance > 0 ? 'income' : '',
+    },
+    {
+      label: '笔数',
+      value: `${expenseCount} 笔支出 · ${incomeCount} 笔收入`,
+      tone: '',
+      wide: true,
+      small: true,
+    },
     { label: '日均', value: `¥${formatMoney(data.dailyAvg)}`, tone: '' },
     { label: '环比', value: changeText, tone },
   ]
@@ -55,13 +99,17 @@ function chartColors() {
     : { text: '#1f2328', muted: '#8a9099', line: '#e6e8ec', tooltip: '#ffffff' }
 }
 
+function incomeColor() {
+  return isDarkMode.value ? '#73d13d' : '#52c41a'
+}
+
 function buildPieOption() {
   const colors = chartColors()
   return {
     backgroundColor: 'transparent',
     title: {
       text: `¥${formatMoney(byCategory.value.total)}`,
-      subtext: '本月支出',
+      subtext: `本月${typeLabel.value}`,
       left: 'center',
       top: 'center',
       itemGap: 4,
@@ -102,6 +150,8 @@ function buildBarOption() {
   const colors = chartColors()
   const items = daily.value
   const lastIndex = items.length - 1
+  const color = chartType.value === 'income' ? incomeColor() : '#2f6bff'
+  const emphasisColor = chartType.value === 'income' ? color : '#1f57d8'
   return {
     backgroundColor: 'transparent',
     grid: { left: 4, right: 8, top: 24, bottom: 4, containLabel: true },
@@ -115,7 +165,7 @@ function buildBarOption() {
         const point = params[0]
         if (!point) return ''
         const month = Number(monthKey.value.slice(5))
-        return `${month}月${point.axisValue}日<br/>支出 ¥${formatMoney(point.value)}`
+        return `${month}月${point.axisValue}日<br/>${typeLabel.value} ¥${formatMoney(point.value)}`
       },
     },
     xAxis: {
@@ -148,8 +198,76 @@ function buildBarOption() {
         type: 'bar',
         data: items.map((item) => item.amount),
         barMaxWidth: 10,
+        itemStyle: { color, borderRadius: [4, 4, 0, 0] },
+        emphasis: { itemStyle: { color: emphasisColor } },
+      },
+    ],
+  }
+}
+
+function buildMonthlyOption() {
+  const colors = chartColors()
+  const income = incomeColor()
+  return {
+    backgroundColor: 'transparent',
+    grid: { left: 4, right: 8, top: 36, bottom: 4, containLabel: true },
+    legend: {
+      top: 0,
+      right: 0,
+      itemWidth: 10,
+      itemHeight: 10,
+      itemGap: 12,
+      data: ['支出', '收入'],
+      textStyle: { color: colors.muted, fontSize: 11 },
+    },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      backgroundColor: colors.tooltip,
+      borderWidth: 0,
+      textStyle: { color: colors.text },
+      formatter: (params) => {
+        if (!params || !params.length) return ''
+        const lines = params.map(
+          (point) => `${point.marker}${point.seriesName} ¥${formatMoney(point.value)}`,
+        )
+        return `${params[0].axisValue}<br/>${lines.join('<br/>')}`
+      },
+    },
+    xAxis: {
+      type: 'category',
+      data: monthly.value.map((item) => `${Number(item.month.slice(5))}月`),
+      axisLine: { lineStyle: { color: colors.line } },
+      axisTick: { show: false },
+      axisLabel: { color: colors.muted, fontSize: 10 },
+    },
+    yAxis: {
+      type: 'value',
+      splitNumber: 3,
+      axisLabel: {
+        color: colors.muted,
+        fontSize: 10,
+        formatter: (value) => (value >= 1000 ? `${Math.round(value / 100) / 10}k` : value),
+      },
+      splitLine: { lineStyle: { color: colors.line, type: 'dashed' } },
+      axisLine: { show: false },
+    },
+    series: [
+      {
+        name: '支出',
+        type: 'bar',
+        data: monthly.value.map((item) => item.expense),
+        barMaxWidth: 10,
         itemStyle: { color: '#2f6bff', borderRadius: [4, 4, 0, 0] },
         emphasis: { itemStyle: { color: '#1f57d8' } },
+      },
+      {
+        name: '收入',
+        type: 'bar',
+        data: monthly.value.map((item) => item.income),
+        barMaxWidth: 10,
+        itemStyle: { color: income, borderRadius: [4, 4, 0, 0] },
+        emphasis: { itemStyle: { color: income } },
       },
     ],
   }
@@ -164,6 +282,10 @@ function disposeCharts() {
     barChart.dispose()
     barChart = null
   }
+  if (monthlyChart) {
+    monthlyChart.dispose()
+    monthlyChart = null
+  }
 }
 
 function renderCharts() {
@@ -171,24 +293,45 @@ function renderCharts() {
     disposeCharts()
     return
   }
-  if (!pieEl.value || !barEl.value) return
 
-  if (!pieChart || pieChart.getDom() !== pieEl.value) {
-    if (pieChart) pieChart.dispose()
-    pieChart = echarts.init(pieEl.value)
-  }
-  if (!barChart || barChart.getDom() !== barEl.value) {
-    if (barChart) barChart.dispose()
-    barChart = echarts.init(barEl.value)
+  if (chartHasData.value && pieEl.value && barEl.value) {
+    if (!pieChart || pieChart.getDom() !== pieEl.value) {
+      if (pieChart) pieChart.dispose()
+      pieChart = echarts.init(pieEl.value)
+    }
+    if (!barChart || barChart.getDom() !== barEl.value) {
+      if (barChart) barChart.dispose()
+      barChart = echarts.init(barEl.value)
+    }
+    pieChart.setOption(buildPieOption(), true)
+    barChart.setOption(buildBarOption(), true)
+  } else {
+    if (pieChart) {
+      pieChart.dispose()
+      pieChart = null
+    }
+    if (barChart) {
+      barChart.dispose()
+      barChart = null
+    }
   }
 
-  pieChart.setOption(buildPieOption(), true)
-  barChart.setOption(buildBarOption(), true)
+  if (monthly.value.length && monthlyEl.value) {
+    if (!monthlyChart || monthlyChart.getDom() !== monthlyEl.value) {
+      if (monthlyChart) monthlyChart.dispose()
+      monthlyChart = echarts.init(monthlyEl.value)
+    }
+    monthlyChart.setOption(buildMonthlyOption(), true)
+  } else if (monthlyChart) {
+    monthlyChart.dispose()
+    monthlyChart = null
+  }
 }
 
 function onResize() {
   if (pieChart) pieChart.resize()
   if (barChart) barChart.resize()
+  if (monthlyChart) monthlyChart.resize()
 }
 
 async function load() {
@@ -196,28 +339,51 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const [summaryData, categoryData, dailyData] = await Promise.all([
+    const [summaryData, categoryData, dailyData, monthlyData] = await Promise.all([
       api.getSummary(monthKey.value),
-      api.getByCategory(monthKey.value),
-      api.getDaily(monthKey.value),
+      api.getByCategory(monthKey.value, chartType.value),
+      api.getDaily(monthKey.value, chartType.value),
+      api.getMonthly(monthKey.value, 6),
     ])
     if (token !== loadToken) return
     summary.value = summaryData
     byCategory.value = categoryData
     daily.value = dailyData.items || []
+    monthly.value = monthlyData.items || []
   } catch (err) {
     if (token !== loadToken) return
     summary.value = null
     byCategory.value = { total: 0, items: [] }
     daily.value = []
+    monthly.value = []
     error.value = err.message
   } finally {
     if (token === loadToken) loading.value = false
   }
   if (token !== loadToken) return
   await nextTick()
-  if (hasData.value) renderCharts()
-  else disposeCharts()
+  renderCharts()
+}
+
+async function reloadCharts() {
+  const token = ++loadToken
+  try {
+    const [categoryData, dailyData] = await Promise.all([
+      api.getByCategory(monthKey.value, chartType.value),
+      api.getDaily(monthKey.value, chartType.value),
+    ])
+    if (token !== loadToken) return
+    byCategory.value = categoryData
+    daily.value = dailyData.items || []
+  } catch (err) {
+    if (token !== loadToken) return
+    byCategory.value = { total: 0, items: [] }
+    daily.value = []
+    error.value = err.message
+  }
+  if (token !== loadToken) return
+  await nextTick()
+  renderCharts()
 }
 
 function shiftMonth(delta) {
@@ -230,6 +396,7 @@ function onThemeChange() {
 }
 
 watch(monthKey, load)
+watch(chartType, reloadCharts)
 
 onMounted(() => {
   darkQuery = window.matchMedia('(prefers-color-scheme: dark)')
@@ -253,15 +420,37 @@ onBeforeUnmount(() => {
     <header class="page-head">
       <div>
         <h1 class="page-title">统计</h1>
-        <p class="page-sub">看看钱都花在哪儿了</p>
+        <p class="page-sub">看看钱都花在哪儿、又从哪儿来</p>
       </div>
     </header>
 
     <MonthSwitcher :month="monthKey" @shift="shiftMonth" />
 
+    <div class="segmented" role="group" aria-label="统计类型">
+      <button
+        type="button"
+        :class="{ active: chartType === 'expense' }"
+        :aria-pressed="chartType === 'expense'"
+        :disabled="loading"
+        @click="chartType = 'expense'"
+      >
+        支出
+      </button>
+      <button
+        type="button"
+        class="income"
+        :class="{ active: chartType === 'income' }"
+        :aria-pressed="chartType === 'income'"
+        :disabled="loading"
+        @click="chartType = 'income'"
+      >
+        收入
+      </button>
+    </div>
+
     <div v-if="loading" class="stats-skeleton">
       <div class="metric-scroll">
-        <div v-for="n in 4" :key="n" class="skeleton metric-skeleton"></div>
+        <div v-for="n in 6" :key="n" class="skeleton metric-skeleton"></div>
       </div>
       <div class="skeleton chart-skeleton"></div>
       <div class="skeleton chart-skeleton bar"></div>
@@ -282,32 +471,48 @@ onBeforeUnmount(() => {
 
     <template v-else>
       <div class="metric-scroll">
-        <div v-for="metric in metrics" :key="metric.label" class="metric-card">
+        <div
+          v-for="metric in metrics"
+          :key="metric.label"
+          class="metric-card"
+          :class="{ wide: metric.wide }"
+        >
           <div class="metric-label">{{ metric.label }}</div>
-          <div class="metric-value" :class="metric.tone">{{ metric.value }}</div>
+          <div class="metric-value" :class="[metric.tone, { small: metric.small }]">
+            {{ metric.value }}
+          </div>
         </div>
       </div>
 
       <section class="card chart-card">
-        <h2 class="section-title">类目占比</h2>
-        <div ref="pieEl" class="chart pie-chart"></div>
-        <div class="legend">
-          <div v-for="item in byCategory.items" :key="item.categoryId" class="legend-row">
-            <span
-              class="legend-dot"
-              :style="{ backgroundColor: item.color || '#8c8c8c' }"
-            ></span>
-            <span class="legend-icon">{{ item.icon || '📦' }}</span>
-            <span class="legend-name">{{ item.name }}</span>
-            <span class="legend-percent">{{ Number(item.percent).toFixed(1) }}%</span>
-            <span class="legend-amount">¥{{ formatMoney(item.amount) }}</span>
+        <h2 class="section-title">类目占比 · {{ typeLabel }}</h2>
+        <template v-if="chartHasData">
+          <div ref="pieEl" class="chart pie-chart"></div>
+          <div class="legend">
+            <div v-for="item in byCategory.items" :key="item.categoryId" class="legend-row">
+              <span
+                class="legend-dot"
+                :style="{ backgroundColor: item.color || '#8c8c8c' }"
+              ></span>
+              <span class="legend-icon">{{ item.icon || '📦' }}</span>
+              <span class="legend-name">{{ item.name }}</span>
+              <span class="legend-percent">{{ Number(item.percent).toFixed(1) }}%</span>
+              <span class="legend-amount">¥{{ formatMoney(item.amount) }}</span>
+            </div>
           </div>
-        </div>
+        </template>
+        <div v-else class="chart-empty">本月暂无{{ typeLabel }}数据</div>
       </section>
 
       <section class="card chart-card">
-        <h2 class="section-title">每日趋势</h2>
-        <div ref="barEl" class="chart bar-chart"></div>
+        <h2 class="section-title">每日趋势 · {{ typeLabel }}</h2>
+        <div v-if="chartHasData" ref="barEl" class="chart bar-chart"></div>
+        <div v-else class="chart-empty">本月暂无{{ typeLabel }}数据</div>
+      </section>
+
+      <section class="card chart-card">
+        <h2 class="section-title">近 6 个月趋势</h2>
+        <div ref="monthlyEl" class="chart monthly-chart"></div>
       </section>
     </template>
   </div>
@@ -334,6 +539,10 @@ onBeforeUnmount(() => {
   box-shadow: var(--shadow);
 }
 
+.metric-card.wide {
+  flex: 0 0 178px;
+}
+
 .metric-label {
   font-size: 12px;
   color: var(--muted);
@@ -345,6 +554,20 @@ onBeforeUnmount(() => {
   font-weight: 800;
   letter-spacing: -0.3px;
   white-space: nowrap;
+}
+
+.metric-value.small {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.metric-value.income {
+  color: var(--income);
+}
+
+.metric-value.loss {
+  color: var(--danger);
 }
 
 .metric-value.up {
@@ -369,6 +592,17 @@ onBeforeUnmount(() => {
 
 .bar-chart {
   height: 220px;
+}
+
+.monthly-chart {
+  height: 240px;
+}
+
+.chart-empty {
+  padding: 42px 0;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
 }
 
 .legend {

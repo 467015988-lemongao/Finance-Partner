@@ -23,10 +23,14 @@ defineEmits(['go-add'])
 const toast = inject('toast', () => {})
 
 const monthKey = ref(currentMonthKey())
+const typeFilter = ref('all')
 const records = ref([])
-const total = ref(0)
+const expenseTotal = ref(0)
+const incomeTotal = ref(0)
 const loading = ref(true)
 const error = ref('')
+
+const balance = computed(() => Number(incomeTotal.value) - Number(expenseTotal.value))
 
 const editingRecord = ref(null)
 const saving = ref(false)
@@ -67,12 +71,17 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const data = await api.getRecords({ month: monthKey.value })
+    const data = await api.getRecords({
+      month: monthKey.value,
+      type: typeFilter.value === 'all' ? undefined : typeFilter.value,
+    })
     records.value = data.items || []
-    total.value = Number(data.total) || 0
+    expenseTotal.value = Number(data.expenseTotal) || 0
+    incomeTotal.value = Number(data.incomeTotal) || 0
   } catch (err) {
     records.value = []
-    total.value = 0
+    expenseTotal.value = 0
+    incomeTotal.value = 0
     error.value = err.message
   } finally {
     loading.value = false
@@ -126,7 +135,7 @@ async function confirmDelete() {
   }
 }
 
-watch(monthKey, load)
+watch([monthKey, typeFilter], load)
 onMounted(load)
 </script>
 
@@ -135,15 +144,58 @@ onMounted(load)
     <header class="page-head">
       <div>
         <h1 class="page-title">明细</h1>
-        <p class="page-sub">按月查看每一笔支出</p>
+        <p class="page-sub">按月查看每一笔收支</p>
       </div>
     </header>
 
     <MonthSwitcher :month="monthKey" @shift="shiftMonth" />
 
+    <div class="segmented" role="group" aria-label="账目类型筛选">
+      <button
+        type="button"
+        :class="{ active: typeFilter === 'all' }"
+        :aria-pressed="typeFilter === 'all'"
+        @click="typeFilter = 'all'"
+      >
+        全部
+      </button>
+      <button
+        type="button"
+        :class="{ active: typeFilter === 'expense' }"
+        :aria-pressed="typeFilter === 'expense'"
+        @click="typeFilter = 'expense'"
+      >
+        支出
+      </button>
+      <button
+        type="button"
+        class="income"
+        :class="{ active: typeFilter === 'income' }"
+        :aria-pressed="typeFilter === 'income'"
+        @click="typeFilter = 'income'"
+      >
+        收入
+      </button>
+    </div>
+
     <section class="total-card card">
-      <span class="total-label">{{ formatMonthLabel(monthKey) }}合计</span>
-      <strong class="total-value">¥{{ formatMoney(total) }}</strong>
+      <span class="total-label">{{ formatMonthLabel(monthKey) }}汇总</span>
+      <div class="total-grid">
+        <div class="total-item">
+          <span class="total-label">支出合计</span>
+          <strong class="total-value">¥{{ formatMoney(expenseTotal) }}</strong>
+        </div>
+        <div class="total-item">
+          <span class="total-label">收入合计</span>
+          <strong class="total-value income">¥{{ formatMoney(incomeTotal) }}</strong>
+        </div>
+        <div class="total-item">
+          <span class="total-label">结余</span>
+          <strong class="total-value" :class="balance < 0 ? 'loss' : 'income'">
+            {{ balance < 0 ? '-' : '' }}¥{{ formatMoney(Math.abs(balance)) }}
+          </strong>
+        </div>
+      </div>
       <span class="total-sub">共 {{ records.length }} 笔</span>
     </section>
 
@@ -162,7 +214,7 @@ onMounted(load)
     <div v-else-if="!records.length" class="state-block">
       <span class="state-emoji">🧾</span>
       <p class="state-title">暂无账目记录</p>
-      <p class="state-desc">记录第一笔支出，开始管理你的钱包</p>
+      <p class="state-desc">记录第一笔收支，开始管理你的钱包</p>
       <button type="button" class="state-action" @click="$emit('go-add')">去记一笔</button>
     </div>
 
@@ -223,11 +275,36 @@ onMounted(load)
   color: var(--muted);
 }
 
+.total-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin: 2px 0;
+}
+
+.total-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
 .total-value {
-  font-size: 30px;
+  overflow: hidden;
+  font-size: 19px;
   font-weight: 800;
-  letter-spacing: -0.5px;
-  line-height: 1.15;
+  letter-spacing: -0.4px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.total-value.income {
+  color: var(--income);
+}
+
+.total-value.loss {
+  color: var(--danger);
 }
 
 .total-sub {

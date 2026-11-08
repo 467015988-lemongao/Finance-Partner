@@ -206,6 +206,43 @@ button:disabled {
   font-size: 13px;
 }
 
+/* ---------- 分段切换 ---------- */
+
+.segmented {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 10px;
+  background: #f1f4fa;
+}
+
+.segmented-btn {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.segmented-btn:hover:not(.active) {
+  color: var(--text);
+}
+
+.segmented-btn.active {
+  background: #fff;
+  color: var(--primary-strong);
+  box-shadow: 0 1px 4px rgba(17, 31, 65, 0.12);
+}
+
+.segmented-btn.is-income.active {
+  color: var(--success);
+}
+
 /* ---------- 表单 ---------- */
 
 .form-group {

@@ -41,7 +41,7 @@ async function request(path, { method = 'GET', body } = {}) {
 }
 
 export const api = {
-  getCategories: () => request('/categories'),
+  getCategories: (params = {}) => request(`/categories${buildQuery(params)}`),
   createCategory: (body) => request('/categories', { method: 'POST', body }),
   updateCategory: (id, body) =>
     request(`/categories/${encodeURIComponent(id)}`, { method: 'PUT', body }),
@@ -56,8 +56,9 @@ export const api = {
     request(`/records/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
   getSummary: (month) => request(`/stats/summary${buildQuery({ month })}`),
-  getByCategory: (month) => request(`/stats/by-category${buildQuery({ month })}`),
-  getDaily: (month) => request(`/stats/daily${buildQuery({ month })}`),
+  getByCategory: (month, type) =>
+    request(`/stats/by-category${buildQuery({ month, type })}`),
+  getDaily: (month, type) => request(`/stats/daily${buildQuery({ month, type })}`),
   getMonthly: (endMonth, months = 6) =>
     request(`/stats/monthly${buildQuery({ endMonth, months })}`),
 }

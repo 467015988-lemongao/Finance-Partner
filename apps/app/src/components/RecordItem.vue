@@ -20,6 +20,7 @@ const iconStyle = computed(() => {
 
 const categoryName = computed(() => (props.category ? props.category.name : '未知类目'))
 const categoryIcon = computed(() => (props.category ? props.category.icon : '📦'))
+const isIncome = computed(() => props.record.type === 'income')
 
 let startX = 0
 let startY = 0
@@ -112,7 +113,9 @@ function onDelete() {
         <div class="record-name">{{ categoryName }}</div>
         <div v-if="record.note" class="record-note">{{ record.note }}</div>
       </div>
-      <div class="record-amount">¥{{ formatMoney(record.amount) }}</div>
+      <div class="record-amount" :class="{ income: isIncome }">
+        {{ isIncome ? '+' : '-' }}¥{{ formatMoney(record.amount) }}
+      </div>
     </div>
   </div>
 </template>
@@ -191,5 +194,9 @@ function onDelete() {
   flex-shrink: 0;
   font-size: 16px;
   font-weight: 700;
+}
+
+.record-amount.income {
+  color: var(--income);
 }
 </style>

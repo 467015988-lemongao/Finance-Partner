@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import { todayStr, withAlpha } from '../utils/format';
 
 const props = defineProps({
@@ -13,14 +13,36 @@ const props = defineProps({
 
 const emit = defineEmits(['submit', 'cancel']);
 
+function normalizeType(type) {
+  return type === 'income' ? 'income' : 'expense';
+}
+
+const initialType = normalizeType(props.initial?.type);
+
 const form = reactive({
+  type: initialType,
   amount: props.initial ? String(props.initial.amount ?? '') : '',
-  categoryId: props.initial?.categoryId || props.categories[0]?.id || '',
+  categoryId: props.initial?.categoryId || '',
   date: props.initial?.date || todayStr(),
   note: props.initial?.note || '',
 });
 
+const typeCategories = computed(() =>
+  props.categories.filter((category) => normalizeType(category.type) === form.type),
+);
+
+if (!form.categoryId) {
+  form.categoryId = typeCategories.value[0]?.id || '';
+}
+
 const error = ref('');
+
+function selectType(type) {
+  if (form.type === type) return;
+  form.type = type;
+  const valid = typeCategories.value.some((category) => category.id === form.categoryId);
+  if (!valid) form.categoryId = '';
+}
 
 function validate() {
   const raw = String(form.amount).trim();
@@ -29,6 +51,9 @@ function validate() {
     return '请输入大于 0 的金额（最多两位小数）';
   }
   if (!form.categoryId) return '请选择记账类目';
+  if (!typeCategories.value.some((category) => category.id === form.categoryId)) {
+    return '请选择与类型匹配的类目';
+  }
   if (!form.date) return '请选择日期';
   if ([...form.note].length > 50) return '备注最多 50 个字符';
   return '';
@@ -40,6 +65,7 @@ function handleSubmit() {
   emit('submit', {
     amount: Number(form.amount),
     categoryId: form.categoryId,
+    type: form.type,
     date: form.date,
     note: form.note.trim(),
   });
@@ -49,7 +75,9 @@ function reset() {
   form.amount = '';
   form.note = '';
   form.date = todayStr();
-  if (!form.categoryId) form.categoryId = props.categories[0]?.id || '';
+  if (!typeCategories.value.some((category) => category.id === form.categoryId)) {
+    form.categoryId = typeCategories.value[0]?.id || '';
+  }
   error.value = '';
 }
 
@@ -58,6 +86,28 @@ defineExpose({ reset });
 
 <template>
   <form class="record-form" @submit.prevent="handleSubmit">
+    <div class="form-group">
+      <span class="form-label">类型</span>
+      <div class="segmented type-switch">
+        <button
+          type="button"
+          class="segmented-btn"
+          :class="{ active: form.type === 'expense' }"
+          @click="selectType('expense')"
+        >
+          支出
+        </button>
+        <button
+          type="button"
+          class="segmented-btn is-income"
+          :class="{ active: form.type === 'income' }"
+          @click="selectType('income')"
+        >
+          收入
+        </button>
+      </div>
+    </div>
+
     <div class="form-group">
       <label class="form-label" for="record-amount">金额</label>
       <div class="amount-field">
@@ -78,7 +128,7 @@ defineExpose({ reset });
       <span class="form-label">类目</span>
       <div class="category-grid">
         <button
-          v-for="category in categories"
+          v-for="category in typeCategories"
           :key="category.id"
           type="button"
           class="category-pill"
@@ -91,7 +141,7 @@ defineExpose({ reset });
           <span class="cat-name">{{ category.name }}</span>
         </button>
       </div>
-      <p v-if="!categories.length" class="form-hint">
+      <p v-if="!typeCategories.length" class="form-hint">
         暂无可用类目，请先在「类目管理」中添加
       </p>
     </div>
@@ -132,6 +182,10 @@ defineExpose({ reset });
   display: flex;
   flex-direction: column;
   gap: 18px;
+}
+
+.type-switch {
+  align-self: flex-start;
 }
 
 .amount-field {

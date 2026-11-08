@@ -106,7 +106,14 @@ onMounted(loadSummary)
         <button type="button" class="link-btn" @click="loadSummary">重试</button>
       </template>
       <template v-else-if="summary">
-        本月已记 {{ summary.count }} 笔 · 合计 ¥{{ formatMoney(summary.total) }}
+        本月支出 ¥{{ formatMoney(summary.expenseTotal) }}
+        <span class="sep">·</span>
+        本月收入 <span class="income">¥{{ formatMoney(summary.incomeTotal) }}</span>
+        <span class="sep">·</span>
+        结余
+        <span :class="Number(summary.balance) < 0 ? 'loss' : 'income'">
+          {{ Number(summary.balance) < 0 ? '-' : '' }}¥{{ formatMoney(Math.abs(Number(summary.balance) || 0)) }}
+        </span>
       </template>
       <template v-else>本月暂无记录</template>
     </div>
@@ -136,5 +143,19 @@ onMounted(loadSummary)
   font-size: 13px;
   color: var(--muted);
   text-align: center;
+}
+
+.summary-line .income {
+  color: var(--income);
+  font-weight: 600;
+}
+
+.summary-line .loss {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.summary-line .sep {
+  margin: 0 4px;
 }
 </style>

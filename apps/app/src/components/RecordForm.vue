@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { formatMoney, todayString } from '../utils/format'
 
 const props = defineProps({
@@ -15,6 +15,15 @@ const amount = ref('')
 const categoryId = ref('')
 const date = ref(todayString())
 const note = ref('')
+const type = ref('expense')
+
+function normalizeType(value) {
+  return value === 'income' ? 'income' : 'expense'
+}
+
+const visibleCategories = computed(() =>
+  props.categories.filter((category) => normalizeType(category.type) === type.value),
+)
 
 function syncFromInitial(value) {
   if (value) {
@@ -22,11 +31,13 @@ function syncFromInitial(value) {
     categoryId.value = value.categoryId || ''
     date.value = value.date || todayString()
     note.value = value.note || ''
+    type.value = normalizeType(value.type)
   } else {
     amount.value = ''
     categoryId.value = ''
     date.value = todayString()
     note.value = ''
+    type.value = 'expense'
   }
 }
 
@@ -35,12 +46,23 @@ watch(() => props.initial, syncFromInitial, { immediate: true })
 watch(
   () => props.categories,
   (list) => {
-    if (!categoryId.value && list && list.length) {
-      categoryId.value = list[0].id
+    const available = (list || []).filter(
+      (category) => normalizeType(category.type) === type.value,
+    )
+    if (!available.some((category) => category.id === categoryId.value)) {
+      categoryId.value = available.length ? available[0].id : ''
     }
   },
   { immediate: true },
 )
+
+function setType(next) {
+  if (type.value === next) return
+  type.value = next
+  if (!visibleCategories.value.some((category) => category.id === categoryId.value)) {
+    categoryId.value = ''
+  }
+}
 
 function onAmountInput(event) {
   let next = String(event.target.value).replace(/[^\d.]/g, '')
@@ -77,6 +99,7 @@ function handleSubmit() {
   emit('submit', {
     amount: Number(text),
     categoryId: categoryId.value,
+    type: type.value,
     date: date.value,
     note: String(note.value).trim(),
   })
@@ -93,6 +116,26 @@ defineExpose({ resetAfterSave })
 
 <template>
   <form class="record-form" novalidate @submit.prevent="handleSubmit">
+    <div class="segmented" role="group" aria-label="收支类型">
+      <button
+        type="button"
+        :class="{ active: type === 'expense' }"
+        :aria-pressed="type === 'expense'"
+        @click="setType('expense')"
+      >
+        支出
+      </button>
+      <button
+        type="button"
+        class="income"
+        :class="{ active: type === 'income' }"
+        :aria-pressed="type === 'income'"
+        @click="setType('income')"
+      >
+        收入
+      </button>
+    </div>
+
     <div class="amount-row">
       <span class="currency" aria-hidden="true">¥</span>
       <input
@@ -109,10 +152,12 @@ defineExpose({ resetAfterSave })
 
     <div class="field-block">
       <div class="field-label">类目</div>
-      <div v-if="!categories.length" class="inline-empty">暂无可用类目，请到「我的」新增</div>
+      <div v-if="!visibleCategories.length" class="inline-empty">
+        暂无{{ type === 'income' ? '收入' : '支出' }}类目，请到「我的」新增
+      </div>
       <div v-else class="category-grid">
         <button
-          v-for="category in categories"
+          v-for="category in visibleCategories"
           :key="category.id"
           type="button"
           class="category-item"

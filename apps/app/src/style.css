@@ -13,6 +13,8 @@
   --danger: #ff4d4f;
   --danger-soft: rgba(255, 77, 79, 0.12);
   --success: #16a34a;
+  --income: #52c41a;
+  --income-soft: rgba(82, 196, 26, 0.12);
   --shadow: 0 2px 12px rgba(16, 24, 40, 0.05);
   --radius: 16px;
 }
@@ -30,6 +32,8 @@
     --danger: #ff6b6b;
     --danger-soft: rgba(255, 107, 107, 0.16);
     --success: #4ade80;
+    --income: #73d13d;
+    --income-soft: rgba(115, 209, 61, 0.18);
     --shadow: none;
   }
 }
@@ -224,6 +228,37 @@ button {
   color: var(--text);
   font-size: 14px;
   font-weight: 600;
+}
+
+.segmented {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--bg-soft);
+}
+
+.segmented button {
+  flex: 1;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 14px;
+  font-weight: 600;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.segmented button.active {
+  background: var(--card);
+  color: var(--primary);
+  box-shadow: var(--shadow);
+}
+
+.segmented button.income.active {
+  color: var(--income);
 }
 
 .link-btn {

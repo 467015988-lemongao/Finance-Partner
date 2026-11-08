@@ -5,7 +5,8 @@
     "icon": "🍜",
     "color": "#9254de",
     "isDefault": true,
-    "createdAt": "2026-11-08T09:10:34.528Z"
+    "createdAt": "2026-11-08T09:10:34.528Z",
+    "type": "expense"
   },
   {
     "id": "c_1794129034529_898c",
@@ -13,7 +14,8 @@
     "icon": "🚌",
     "color": "#40a9ff",
     "isDefault": true,
-    "createdAt": "2026-11-08T09:10:34.529Z"
+    "createdAt": "2026-11-08T09:10:34.529Z",
+    "type": "expense"
   },
   {
     "id": "c_1794129034530_78hg",
@@ -21,7 +23,8 @@
     "icon": "🛍️",
     "color": "#9254de",
     "isDefault": true,
-    "createdAt": "2026-11-08T09:10:34.530Z"
+    "createdAt": "2026-11-08T09:10:34.530Z",
+    "type": "expense"
   },
   {
     "id": "c_1794129034530_nsxd",
@@ -29,7 +32,8 @@
     "icon": "🏠",
     "color": "#36cfc9",
     "isDefault": true,
-    "createdAt": "2026-11-08T09:10:34.531Z"
+    "createdAt": "2026-11-08T09:10:34.531Z",
+    "type": "expense"
   },
   {
     "id": "c_1794129034530_blek",
@@ -37,7 +41,8 @@
     "icon": "🎮",
     "color": "#ffc53d",
     "isDefault": true,
-    "createdAt": "2026-11-08T09:10:34.532Z"
+    "createdAt": "2026-11-08T09:10:34.532Z",
+    "type": "expense"
   },
   {
     "id": "c_1794129034530_if73",
@@ -45,7 +50,8 @@
     "icon": "💊",
     "color": "#ff4d4f",
     "isDefault": true,
-    "createdAt": "2026-11-08T09:10:34.533Z"
+    "createdAt": "2026-11-08T09:10:34.533Z",
+    "type": "expense"
   },
   {
     "id": "c_1794129034530_d02j",
@@ -53,6 +59,61 @@
     "icon": "📦",
     "color": "#8c8c8c",
     "isDefault": true,
-    "createdAt": "2026-11-08T09:10:34.534Z"
+    "createdAt": "2026-11-08T09:10:34.534Z",
+    "type": "expense"
+  },
+  {
+    "id": "c_1794139501559_o0ge",
+    "name": "工资",
+    "icon": "💰",
+    "color": "#52c41a",
+    "type": "income",
+    "isDefault": true,
+    "createdAt": "2026-11-08T12:05:01.560Z"
+  },
+  {
+    "id": "c_1794139501561_givp",
+    "name": "奖金",
+    "icon": "🏆",
+    "color": "#faad14",
+    "type": "income",
+    "isDefault": true,
+    "createdAt": "2026-11-08T12:05:01.561Z"
+  },
+  {
+    "id": "c_1794139501561_0r3z",
+    "name": "理财",
+    "icon": "📈",
+    "color": "#13c2c2",
+    "type": "income",
+    "isDefault": true,
+    "createdAt": "2026-11-08T12:05:01.562Z"
+  },
+  {
+    "id": "c_1794139501561_50l3",
+    "name": "兼职",
+    "icon": "💼",
+    "color": "#2f54eb",
+    "type": "income",
+    "isDefault": true,
+    "createdAt": "2026-11-08T12:05:01.563Z"
+  },
+  {
+    "id": "c_1794139501561_acco",
+    "name": "红包",
+    "icon": "🧧",
+    "color": "#f5222d",
+    "type": "income",
+    "isDefault": true,
+    "createdAt": "2026-11-08T12:05:01.564Z"
+  },
+  {
+    "id": "c_1794139501561_th96",
+    "name": "其他收入",
+    "icon": "🪙",
+    "color": "#8c8c8c",
+    "type": "income",
+    "isDefault": true,
+    "createdAt": "2026-11-08T12:05:01.565Z"
   }
 ]
